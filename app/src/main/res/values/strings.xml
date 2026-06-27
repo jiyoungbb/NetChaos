@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">NetChaos</string>
+    <string name="network_condition">Network Condition</string>
+    <string name="normal_bypass">Bypass (Internet OK)</string>
+    <string name="loss_100">100% Loss (Block)</string>
+    <string name="poor">Poor (Timeout Test)</string>
+    <string name="normal_delay">Normal (Timeout Test)</string>
+    <string name="ultra_fast">Ultra Fast (Timeout Test)</string>
+    <string name="apply">Apply</string>
+    <string name="current_applied_condition">Applied Condition: %1$s</string>
+    <string name="random_disconnect">Random Disconnect</string>
+    <string name="random_disconnect_desc">* 적용 시 네트워크 10초 연결 3초 끊김 반복</string>
+    <string name="on">ON</string>
+    <string name="off">OFF</string>
+    <string name="random_disconnect_off">Random Disconnect Off</string>
+    <string name="random_disconnect_on">Random Disconnect On</string>
+    <string name="status_idle">Status: Idle</string>
+    <string name="status_condition">Condition: %1$s</string>
+    <string name="status_connected">Status: Connected (10s)</string>
+    <string name="status_disconnected">Status: Disconnected (3s)</string>
+</resources>
