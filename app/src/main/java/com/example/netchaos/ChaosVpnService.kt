@@ -5,6 +5,7 @@ import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ChaosVpnService : VpnService() {
@@ -12,17 +13,19 @@ class ChaosVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private val stopVpn = AtomicBoolean(false)
     private var vpnThread: Thread? = null
+    private var natEngine: NatEngine? = null
 
     companion object {
         const val ACTION_CONNECT = "com.example.netchaos.START"
         const val ACTION_DISCONNECT = "com.example.netchaos.STOP"
-        
+
         var isRunning = false
-        
+
         // Baseline settings from Network Condition
         var baseDropAll = false
         var baseDelayMs: Long = 0
-        
+        var baseBandwidthBps: Long = 0 // <= 0 means unlimited
+
         // Temporary override from Random Disconnect
         var randomBlock = false
     }
@@ -52,10 +55,20 @@ class ChaosVpnService : VpnService() {
                 builder.addRoute("0.0.0.0", 0)
                 
                 vpnInterface = builder.establish()
-                
-                val input = FileInputStream(vpnInterface?.fileDescriptor)
+                val fd = vpnInterface ?: return@Thread
+
+                val input = FileInputStream(fd.fileDescriptor)
+                val output = FileOutputStream(fd.fileDescriptor)
+                val engine = NatEngine(
+                    vpnService = this,
+                    tunOutput = output,
+                    speedProvider = { baseBandwidthBps },
+                    latencyProvider = { baseDelayMs }
+                )
+                natEngine = engine
+
                 val buffer = ByteArray(32768)
-                
+
                 while (!stopVpn.get()) {
                     val read = input.read(buffer)
                     if (read > 0) {
@@ -63,20 +76,19 @@ class ChaosVpnService : VpnService() {
                         if (randomBlock || baseDropAll) {
                             continue
                         }
-                        
-                        // If not dropping, apply delay if any
-                        if (baseDelayMs > 0) {
-                            Thread.sleep(baseDelayMs)
-                        }
-                    }
-                    // Small sleep to prevent CPU hogging if no data
-                    if (read <= 0) {
+                        // Otherwise relay the packet (real forwarding, with
+                        // latency/bandwidth applied inside the NAT engine)
+                        engine.handlePacket(buffer, read)
+                    } else {
+                        // Small sleep to prevent CPU hogging if no data
                         Thread.sleep(10)
                     }
                 }
             } catch (e: Exception) {
                 Log.e("ChaosVpnService", "Error in VPN thread", e)
             } finally {
+                natEngine?.shutdown()
+                natEngine = null
                 isRunning = false
                 vpnInterface?.close()
                 vpnInterface = null

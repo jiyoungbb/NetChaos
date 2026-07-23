@@ -74,22 +74,28 @@ class MainActivity : AppCompatActivity() {
             R.id.rb_normal -> {
                 ChaosVpnService.baseDropAll = false
                 ChaosVpnService.baseDelayMs = 0
+                ChaosVpnService.baseBandwidthBps = 0
                 getString(R.string.normal_bypass)
             }
             R.id.rb_loss_100 -> {
                 ChaosVpnService.baseDropAll = true
                 ChaosVpnService.baseDelayMs = 0
+                ChaosVpnService.baseBandwidthBps = 0
                 getString(R.string.loss_100)
             }
             R.id.rb_poor -> {
-                ChaosVpnService.baseDropAll = true
+                // Relay traffic (don't drop), but throttle it: ~16 KB/s + 3s added latency
+                ChaosVpnService.baseDropAll = false
                 ChaosVpnService.baseDelayMs = 3000
+                ChaosVpnService.baseBandwidthBps = 16_000
                 getString(R.string.poor)
             }
-            R.id.rb_ultra_fast -> {
-                ChaosVpnService.baseDropAll = true
-                ChaosVpnService.baseDelayMs = 5
-                getString(R.string.ultra_fast)
+            R.id.rb_very_slow -> {
+                // Relay traffic, but throttle it harder than "poor": ~4 KB/s (~32kbps) + 5s added latency
+                ChaosVpnService.baseDropAll = false
+                ChaosVpnService.baseDelayMs = 5000
+                ChaosVpnService.baseBandwidthBps = 4_000
+                getString(R.string.very_slow)
             }
             else -> "Unknown"
         }

@@ -1,11 +1,11 @@
 <resources>
     <string name="app_name">NetChaos</string>
     <string name="network_condition">Network Condition</string>
-    <string name="normal_bypass">Bypass (Internet OK)</string>
-    <string name="loss_100">100% Loss (Block)</string>
-    <string name="poor">Poor (Timeout Test)</string>
+    <string name="normal_bypass">정상 연결</string>
+    <string name="loss_100">완전 차단</string>
+    <string name="poor">느린 네트워크 (약 128kbps, 지연 3초)</string>
     <string name="normal_delay">Normal (Timeout Test)</string>
-    <string name="ultra_fast">Ultra Fast (Timeout Test)</string>
+    <string name="very_slow">더 느린 네트워크 (약 32kbps, 지연 5초)</string>
     <string name="apply">Apply</string>
     <string name="current_applied_condition">Applied Condition: %1$s</string>
     <string name="random_disconnect">Random Disconnect</string>

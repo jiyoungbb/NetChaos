@@ -49,11 +49,11 @@
                 android:text="@string/poor" />
 
             <RadioButton
-                android:id="@+id/rb_ultra_fast"
+                android:id="@+id/rb_very_slow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="@string/ultra_fast" />
+                android:text="@string/very_slow" />
         </RadioGroup>
 
         <Button
