@@ -1,4 +1,4 @@
-package com.example.netchaos
+package com.berry.netchaos
 
 /**
  * Simple shared-pipe rate limiter. bytesPerSecond <= 0 means unlimited.

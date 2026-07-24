@@ -1,4 +1,4 @@
-package com.example.netchaos
+package com.berry.netchaos
 
 import android.content.Intent
 import android.net.VpnService
@@ -16,8 +16,8 @@ class ChaosVpnService : VpnService() {
     private var natEngine: NatEngine? = null
 
     companion object {
-        const val ACTION_CONNECT = "com.example.netchaos.START"
-        const val ACTION_DISCONNECT = "com.example.netchaos.STOP"
+        const val ACTION_CONNECT = "com.berry.netchaos.START"
+        const val ACTION_DISCONNECT = "com.berry.netchaos.STOP"
 
         var isRunning = false
 

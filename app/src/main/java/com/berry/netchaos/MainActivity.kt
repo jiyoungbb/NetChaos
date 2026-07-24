@@ -1,4 +1,4 @@
-package com.example.netchaos
+package com.berry.netchaos
 
 import android.content.Intent
 import android.net.VpnService

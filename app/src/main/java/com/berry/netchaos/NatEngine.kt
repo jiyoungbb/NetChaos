@@ -1,4 +1,4 @@
-package com.example.netchaos
+package com.berry.netchaos
 
 import android.net.VpnService
 import android.util.Log
@@ -11,8 +11,10 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -27,6 +29,17 @@ private const val TCP_PSH = 0x08
 private const val TCP_ACK = 0x10
 
 private const val MAX_SEGMENT = 1400
+
+// Hard cap on concurrent flows. Without this, a busy phone (background apps
+// constantly opening short-lived UDP flows for DNS/QUIC/keepalives) spawns one
+// OS thread per flow via startTcpReader/startUdpReader and can exhaust the
+// process's thread/memory limits within seconds, crashing the whole app.
+private const val MAX_SESSIONS = 200
+private const val UDP_IDLE_TIMEOUT_MS = 20_000
+private const val TCP_IDLE_TIMEOUT_MS = 120_000
+private const val READER_STACK_SIZE = 256 * 1024L
+private const val IO_POOL_THREADS = 32
+private const val IO_QUEUE_CAPACITY = 1024
 
 private data class Tuple(val srcIp: Int, val srcPort: Int, val dstIp: Int, val dstPort: Int)
 
@@ -64,7 +77,15 @@ class NatEngine(
     private val writeLock = Any()
     private val running = AtomicBoolean(true)
 
-    private val ioExecutor = Executors.newCachedThreadPool()
+    // Bounded (not cached/unbounded): applyLatency() blocks whichever thread runs a
+    // task for the full simulated delay, so an unbounded pool would spin up one
+    // native OS thread per in-flight packet under real traffic and crash the
+    // process (see MAX_SESSIONS comment above for the same class of bug).
+    private val ioExecutor = ThreadPoolExecutor(
+        4, IO_POOL_THREADS, 30, TimeUnit.SECONDS,
+        ArrayBlockingQueue(IO_QUEUE_CAPACITY),
+        ThreadPoolExecutor.DiscardOldestPolicy()
+    )
     private val scheduler = Executors.newScheduledThreadPool(1)
 
     init {
@@ -125,7 +146,7 @@ class NatEngine(
         }
 
         if (isSyn && !isAck) {
-            if (!tcpSessions.containsKey(tuple)) {
+            if (!tcpSessions.containsKey(tuple) && tcpSessions.size + udpSessions.size < MAX_SESSIONS) {
                 openTcpSession(tuple, seq)
             }
             return
@@ -178,6 +199,7 @@ class NatEngine(
                 vpnService.protect(socket)
                 socket.connect(InetSocketAddress(intToInetAddress(tuple.dstIp), tuple.dstPort), 10_000)
                 socket.tcpNoDelay = true
+                socket.soTimeout = TCP_IDLE_TIMEOUT_MS
 
                 val serverIsn = (Math.random() * 0xFFFFFFFFL).toLong() and 0xFFFFFFFFL
                 val session = TcpSession(
@@ -196,7 +218,7 @@ class NatEngine(
     }
 
     private fun startTcpReader(session: TcpSession) {
-        Thread({
+        val task = Runnable {
             val buf = ByteArray(4096)
             try {
                 val input = session.socket.getInputStream()
@@ -225,7 +247,8 @@ class NatEngine(
                 session.serverSeq = (session.serverSeq + 1) and 0xFFFFFFFFL
             }
             maybeCloseSession(session)
-        }, "TcpReader-${session.tuple}").start()
+        }
+        Thread(null, task, "TcpReader-${session.tuple}", READER_STACK_SIZE).start()
     }
 
     private fun maybeCloseSession(session: TcpSession) {
@@ -272,24 +295,28 @@ class NatEngine(
         if (payloadLen < 0) return
         val tuple = Tuple(srcIp, srcPort, dstIp, dstPort)
 
-        val session = udpSessions.getOrPut(tuple) {
+        var session = udpSessions[tuple]
+        if (session == null) {
+            if (tcpSessions.size + udpSessions.size >= MAX_SESSIONS) return
             val socket = DatagramSocket()
             vpnService.protect(socket)
-            val s = UdpSession(tuple, socket)
-            startUdpReader(s)
-            s
+            socket.soTimeout = UDP_IDLE_TIMEOUT_MS
+            session = UdpSession(tuple, socket)
+            udpSessions[tuple] = session
+            startUdpReader(session)
         }
         session.lastActivity = System.currentTimeMillis()
         val payload = buffer.copyOfRange(payloadOffset, payloadOffset + payloadLen)
 
+        val activeSession = session
         ioExecutor.submit {
             try {
                 applyLatency()
                 throttle(payload.size)
-                session.socket.send(DatagramPacket(payload, payload.size, intToInetAddress(dstIp), dstPort))
+                activeSession.socket.send(DatagramPacket(payload, payload.size, intToInetAddress(dstIp), dstPort))
             } catch (e: IOException) {
                 udpSessions.remove(tuple)
-                try { session.socket.close() } catch (e2: IOException) { }
+                try { activeSession.socket.close() } catch (e2: IOException) { }
             } catch (e: InterruptedException) {
                 // engine shutting down
             }
@@ -297,7 +324,7 @@ class NatEngine(
     }
 
     private fun startUdpReader(session: UdpSession) {
-        Thread({
+        val task = Runnable {
             val buf = ByteArray(4096)
             try {
                 while (running.get()) {
@@ -315,14 +342,15 @@ class NatEngine(
                     writeToTun(ipPacket)
                 }
             } catch (e: IOException) {
-                // socket closed or destination unreachable; drop the session
+                // socket closed, idle timeout, or destination unreachable; drop the session
             } catch (e: InterruptedException) {
                 // engine shutting down
             } finally {
                 udpSessions.remove(session.tuple)
                 try { session.socket.close() } catch (e: IOException) { }
             }
-        }, "UdpReader-${session.tuple}").start()
+        }
+        Thread(null, task, "UdpReader-${session.tuple}", READER_STACK_SIZE).start()
     }
 
     private fun pruneIdleUdpSessions() {
