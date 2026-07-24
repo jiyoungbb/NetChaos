@@ -1,5 +1,9 @@
+import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
+
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.appdistribution)
 }
 
 android {
@@ -27,6 +31,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            firebaseAppDistribution {
+                artifactType = "APK"
+                releaseNotes = "Test build"
+                // Comma-separated tester emails, e.g. "a@example.com,b@example.com",
+                // or testersFile = "path/to/testers.txt". Alternatively use a
+                // Firebase Console tester group: groups = "qa-team"
+                testers = ""
+            }
         }
     }
     compileOptions {
