@@ -36,10 +36,10 @@ android {
             firebaseAppDistribution {
                 artifactType = "APK"
                 releaseNotes = "Test build"
-                // Comma-separated tester emails, e.g. "a@example.com,b@example.com",
-                // or testersFile = "path/to/testers.txt". Alternatively use a
-                // Firebase Console tester group: groups = "qa-team"
-                testers = ""
+                // Managed in the Firebase console (App Distribution > Testers & groups).
+                // Add/remove testers there - no code change or rebuild needed for that,
+                // just create a group named "testers" and put people in it.
+                groups = "testers"
             }
         }
     }
