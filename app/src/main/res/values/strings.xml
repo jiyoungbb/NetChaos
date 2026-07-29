@@ -6,6 +6,11 @@
     <string name="poor">느린 네트워크 (약 128kbps, 지연 3초)</string>
     <string name="normal_delay">Normal (Timeout Test)</string>
     <string name="very_slow">더 느린 네트워크 (약 32kbps, 지연 5초)</string>
+    <string name="custom_speed">직접 입력</string>
+    <string name="custom_speed_hint">예: 500</string>
+    <string name="custom_speed_applied">직접 입력 (약 %1$dkbps)</string>
+    <string name="custom_speed_error">속도를 1 이상의 숫자(kbps)로 입력해주세요.</string>
+    <string name="kbps_unit">kbps</string>
     <string name="apply">Apply</string>
     <string name="current_applied_condition">Applied Condition: %1$s</string>
     <string name="random_disconnect">Random Disconnect</string>

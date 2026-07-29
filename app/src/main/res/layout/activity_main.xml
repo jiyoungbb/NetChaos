@@ -54,7 +54,37 @@
                 android:layout_height="wrap_content"
                 android:padding="8dp"
                 android:text="@string/very_slow" />
+
+            <RadioButton
+                android:id="@+id/rb_custom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="@string/custom_speed" />
         </RadioGroup>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="32dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/et_custom_speed"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:enabled="false"
+                android:hint="@string/custom_speed_hint"
+                android:inputType="number"
+                android:maxLength="6" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/kbps_unit" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/btn_apply_condition"

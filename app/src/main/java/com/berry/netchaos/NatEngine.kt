@@ -11,9 +11,9 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -39,7 +39,6 @@ private const val UDP_IDLE_TIMEOUT_MS = 20_000
 private const val TCP_IDLE_TIMEOUT_MS = 120_000
 private const val READER_STACK_SIZE = 256 * 1024L
 private const val IO_POOL_THREADS = 32
-private const val IO_QUEUE_CAPACITY = 1024
 
 private data class Tuple(val srcIp: Int, val srcPort: Int, val dstIp: Int, val dstPort: Int)
 
@@ -81,10 +80,24 @@ class NatEngine(
     // task for the full simulated delay, so an unbounded pool would spin up one
     // native OS thread per in-flight packet under real traffic and crash the
     // process (see MAX_SESSIONS comment above for the same class of bug).
+    //
+    // Must use SynchronousQueue (zero capacity), not a bounded queue with a
+    // capacity: ThreadPoolExecutor only grows past corePoolSize once the queue
+    // is full, so a queue with any real capacity effectively caps concurrency
+    // at corePoolSize and queues everything else behind it - meaning a couple
+    // of slow/unreachable connections (e.g. socket.connect() blocking for up to
+    // 10s) would stall every other flow's connection attempt, including fast
+    // ones, until the slow ones finished or timed out.
+    //
+    // Must use DiscardPolicy, not DiscardOldestPolicy: DiscardOldestPolicy polls
+    // the queue to evict something before retrying, but a SynchronousQueue is
+    // always empty, so it evicts nothing and retries forever - infinite
+    // recursion, immediate StackOverflowError crash the moment the pool
+    // saturates (32 flows in flight at once).
     private val ioExecutor = ThreadPoolExecutor(
         4, IO_POOL_THREADS, 30, TimeUnit.SECONDS,
-        ArrayBlockingQueue(IO_QUEUE_CAPACITY),
-        ThreadPoolExecutor.DiscardOldestPolicy()
+        SynchronousQueue(),
+        ThreadPoolExecutor.DiscardPolicy()
     )
     private val scheduler = Executors.newScheduledThreadPool(1)
 
@@ -196,7 +209,16 @@ class NatEngine(
         ioExecutor.submit {
             try {
                 val socket = Socket()
-                vpnService.protect(socket)
+                if (!vpnService.protect(socket)) {
+                    // Without protect(), this socket's own SYN would get captured by our
+                    // own tun (0.0.0.0/0 route) and looped back into this engine as a
+                    // fresh incoming connection - never reaching the real network, and
+                    // potentially cascading. Fail fast instead of calling connect().
+                    Log.e(TAG, "protect() failed for $tuple, refusing to connect")
+                    socket.close()
+                    sendTcpPacket(tuple, seq = 0, ack = (clientIsn + 1) and 0xFFFFFFFFL, flags = TCP_RST or TCP_ACK, payload = null)
+                    return@submit
+                }
                 socket.connect(InetSocketAddress(intToInetAddress(tuple.dstIp), tuple.dstPort), 10_000)
                 socket.tcpNoDelay = true
                 socket.soTimeout = TCP_IDLE_TIMEOUT_MS
@@ -299,7 +321,11 @@ class NatEngine(
         if (session == null) {
             if (tcpSessions.size + udpSessions.size >= MAX_SESSIONS) return
             val socket = DatagramSocket()
-            vpnService.protect(socket)
+            if (!vpnService.protect(socket)) {
+                Log.e(TAG, "protect() failed for UDP $tuple")
+                socket.close()
+                return
+            }
             socket.soTimeout = UDP_IDLE_TIMEOUT_MS
             session = UdpSession(tuple, socket)
             udpSessions[tuple] = session

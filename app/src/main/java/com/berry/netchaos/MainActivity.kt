@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Button
+import android.widget.EditText
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
@@ -17,6 +18,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnApplyCondition: Button
     private lateinit var tvAppliedCondition: TextView
     private lateinit var rgNetworkCondition: RadioGroup
+    private lateinit var etCustomSpeed: EditText
     private lateinit var btnRdOn: Button
     private lateinit var btnRdOff: Button
     private lateinit var tvStatus: TextView
@@ -40,6 +42,7 @@ class MainActivity : AppCompatActivity() {
         btnApplyCondition = findViewById(R.id.btn_apply_condition)
         tvAppliedCondition = findViewById(R.id.tv_applied_condition)
         rgNetworkCondition = findViewById(R.id.rg_network_condition)
+        etCustomSpeed = findViewById(R.id.et_custom_speed)
         btnRdOn = findViewById(R.id.btn_rd_on)
         btnRdOff = findViewById(R.id.btn_rd_off)
         tvStatus = findViewById(R.id.tv_status)
@@ -49,6 +52,10 @@ class MainActivity : AppCompatActivity() {
 
         btnApplyCondition.setOnClickListener {
             applyNetworkCondition()
+        }
+
+        rgNetworkCondition.setOnCheckedChangeListener { _, checkedId ->
+            etCustomSpeed.isEnabled = checkedId == R.id.rb_custom
         }
 
         btnRdOn.setOnClickListener {
@@ -96,6 +103,17 @@ class MainActivity : AppCompatActivity() {
                 ChaosVpnService.baseDelayMs = 5000
                 ChaosVpnService.baseBandwidthBps = 4_000
                 getString(R.string.very_slow)
+            }
+            R.id.rb_custom -> {
+                val speedKbps = etCustomSpeed.text.toString().toIntOrNull()
+                if (speedKbps == null || speedKbps <= 0) {
+                    Toast.makeText(this, R.string.custom_speed_error, Toast.LENGTH_SHORT).show()
+                    return
+                }
+                ChaosVpnService.baseDropAll = false
+                ChaosVpnService.baseDelayMs = 0
+                ChaosVpnService.baseBandwidthBps = speedKbps * 1000L / 8
+                getString(R.string.custom_speed_applied, speedKbps)
             }
             else -> "Unknown"
         }
@@ -147,7 +165,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateVpnState() {
-        if (ChaosVpnService.baseDropAll || ChaosVpnService.baseDelayMs > 0 || ChaosVpnService.randomBlock) {
+        if (ChaosVpnService.baseDropAll || ChaosVpnService.baseDelayMs > 0 ||
+            ChaosVpnService.baseBandwidthBps > 0 || ChaosVpnService.randomBlock
+        ) {
             prepareAndStartVpn()
         } else {
             stopVpnService()
